@@ -17,6 +17,7 @@ class StatusToTwist(object):
         self._scales = rospy.get_param('~scales')
 
         self._attrs = []
+        self._zero_cnt = 0
         for attr in Status.__slots__:
             if attr.startswith('axis_') or attr.startswith('button_'):
                 self._attrs.append(attr)
@@ -42,16 +43,21 @@ class StatusToTwist(object):
         else:
             twist = to_pub
 
+        fire = False
         for vel_type in self._inputs:
             vel_vec = getattr(twist, vel_type)
             for k, expr in self._inputs[vel_type].items():
                 scale = self._scales[vel_type].get(k, 1.0)
                 val = eval(expr, {}, input_vals)
+                fire |= (val != 0.0)
                 setattr(vel_vec, k, scale * val)
 
-        self._pub.publish(to_pub)
-
-
+        if fire:
+            self._pub.publish(to_pub)
+            self._zero_cnt = 0
+        elif self._zero_cnt == 0:
+            self._pub.publish(to_pub)
+            self._zero_cnt = 1
 def main():
     rospy.init_node('ds4_twist')
 
